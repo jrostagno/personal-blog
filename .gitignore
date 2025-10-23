@@ -1,0 +1,20 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# VSCode
+.vscode/
+
+# Entornos / variables
+.env
+
+# Logs
+*.log
