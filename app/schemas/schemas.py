@@ -1,7 +1,7 @@
 
 
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -46,5 +46,16 @@ class PostPublic(PostBase):
     model_config=ConfigDict(from_attributes=True)
     
 
-     
+class PaginatedPost(BaseModel):
+    page:int
+    total:int
+    total_pages:int
+    per_page:int
+    has_prev: bool
+    has_next:bool
+    order_by: Literal['id','title']
+    direction: Literal['asc','desc']
+    search:Optional[str]=None
+    items:List[PostPublic]
+    
     

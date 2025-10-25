@@ -1,6 +1,7 @@
-from turtle import title
-from fastapi import Depends, FastAPI, HTTPException, status
-from sqlalchemy import select
+from math import ceil
+from typing import List, Literal, Optional
+from fastapi import Depends, FastAPI, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from app.core.db import Base, engine, get_db
@@ -8,16 +9,68 @@ from app.core.db import Base, engine, get_db
 
 # 👇 ¡IMPORTAR modelos antes de create_all!
 from app.models.models import AuthorORM, PostORM, TagORM, post_tags
-from app.schemas.schemas import PostCreate, PostPublic  
+from app.schemas.schemas import PaginatedPost, PostCreate, PostPublic  
 
 # Solo en desarrollo: crear tablas si no existen
 Base.metadata.create_all(bind=engine)
 
 app=FastAPI(title='Personal Blog')
 
-@app.get("/")
-def home():
-    return {"message":"Primer blog TEST"}
+@app.get("/posts",response_model=PaginatedPost)
+def list_post(
+    text: Optional[str] = Query(default=None, deprecated=True,description="parametro obsoleto usa query en su lugar"),
+    query:Optional[str]=Query(default=None,description="Busca por titulo de post", alias='Search',min_length=3,max_length=50, pattern=r"^[\w\sáéíóúÁÉÍÓÚüÜ-]+$"),
+    per_page:int=Query(10,ge=1,le=50, description="Numero de resultados(1-50)"),
+    page:int=Query(1,ge=1,description="Numero de pagina >=1"),
+    order_by:Literal['id','title']=Query("id",description="campo de orden"),
+    direction:Literal['asc','desc']=Query('asc',description='Direccion de orden'),
+    db:Session=Depends(get_db)    
+):
+    
+ results=select(PostORM)
+ 
+ query= query or text
+ 
+ if query:
+     results=results.where(PostORM.title.ilike(f"%{query}%"))
+
+ total=db.scalar(select(func.count()).select_from(results.subquery())) or 0
+ total_pages= ceil(total/per_page) if total>0 else 0
+ current_page= 1 if total_pages==0 else min(page,total_pages)
+ if order_by=='id':
+     order_col= PostORM.id
+ else:
+     order_col= func.lower(PostORM.title)
+     
+ results = results.order_by(
+        order_col.asc() if direction == "asc" else order_col.desc())
+     # results = sorted(
+    #     results, key=lambda post: post[order_by], reverse=(direction == "desc"))
+ if total_pages == 0:
+    items: List[PostPublic] = []
+ else:
+    start = (current_page - 1) * per_page
+    posts_orm = db.execute(results.limit(
+            per_page).offset(start)).scalars().all()
+    items = [PostPublic.model_validate(post) for post in posts_orm]
+
+ has_prev = current_page > 1
+ has_next = current_page < total_pages if total_pages > 0 else False
+
+ return PaginatedPost(
+        page=current_page,
+        per_page=per_page,
+        total=total,
+        total_pages=total_pages,
+        has_prev=has_prev,
+        has_next=has_next,
+        order_by=order_by,
+        direction=direction,
+        search=query,
+        items=items
+    )
+
+
 
 
 # @app.post("/post/")
@@ -49,7 +102,7 @@ def create_post(post:PostCreate,db:Session=Depends(get_db)):
         db.add(new_post)
         db.commit()
         db.refresh(new_post)
-        return new_post
+        return PostPublic.model_validate(new_post)
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409,detail='El titulo ya existe, prueba con otro')
