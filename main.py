@@ -52,7 +52,9 @@ def list_post(
     start = (current_page - 1) * per_page
     posts_orm = db.execute(results.limit(
             per_page).offset(start)).scalars().all()
-    items = [PostPublic.model_validate(post) for post in posts_orm]
+    items = [PostPublic.model_validate(post) for post in posts_orm]   #convertir tus modelos de SQLAlchemy en modelos de respuesta Pydantic.
+    
+    # model_validate() toma los atributos del objeto ORM y genera una instancia validada de PostPublic
 
  has_prev = current_page > 1
  has_next = current_page < total_pages if total_pages > 0 else False
@@ -111,4 +113,18 @@ def create_post(post:PostCreate,db:Session=Depends(get_db)):
         raise HTTPException(status_code=500,detail="Error al crear el post")
     
     
+
+@app.delete("/delete/{post_id}",status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(post_id:int,db:Session=Depends(get_db)):
+    post_to_delete= db.execute(select(PostORM).where(PostORM.id==post_id)).scalar_one_or_none()
+    
+    if not post_to_delete:
+        raise HTTPException(status_code=404,detail='Post no encontrado')
+    
+    db.delete(post_to_delete)
+    db.commit()
+    
+    return
+    
+
         
