@@ -45,6 +45,11 @@ class PostPublic(PostBase):
     id:int
     model_config=ConfigDict(from_attributes=True)
     
+class PostSummary(BaseModel):
+    id:int
+    title:str
+    model_config=ConfigDict(from_attributes=True)
+    
 
 class PaginatedPost(BaseModel):
     page:int

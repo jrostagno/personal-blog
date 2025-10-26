@@ -1,6 +1,6 @@
 from math import ceil
-from typing import List, Literal, Optional
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from typing import List, Literal, Optional, Union
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -9,7 +9,7 @@ from app.core.db import Base, engine, get_db
 
 # 👇 ¡IMPORTAR modelos antes de create_all!
 from app.models.models import AuthorORM, PostORM, TagORM, post_tags
-from app.schemas.schemas import PaginatedPost, PostCreate, PostPublic  
+from app.schemas.schemas import PaginatedPost, PostCreate, PostPublic, PostSummary  
 
 # Solo en desarrollo: crear tablas si no existen
 Base.metadata.create_all(bind=engine)
@@ -75,8 +75,21 @@ def list_post(
 
 
 
-# @app.post("/post/")
-# def home():
+@app.get("/posts/{post_id}",response_model=Union[PostPublic,PostSummary], response_description="Post encontrado")
+def get_post_by_id(
+    post_id:int=Path(...,ge=1,title="Id del post",description="Identificador del post",example="ejemplo 1"),
+    include_content:bool= Query(default=True,description="Incluir o no el Contenido"),
+    db:Session=Depends(get_db)):
+    post_fin= db.execute(select(PostORM).where(PostORM.id==post_id)).scalar_one_or_none()
+    
+    if not post_fin:
+        raise HTTPException(status_code=404,detail="Post no encontrado")
+    if include_content:
+        return PostPublic.model_validate(post_fin,from_attributes=True)
+    
+    return PostSummary.model_validate(post_fin,from_attributes=True)
+
+
 
 @app.post("/posts", response_model=PostPublic,response_description="Post Creado con exito",status_code=status.HTTP_201_CREATED)
 def create_post(post:PostCreate,db:Session=Depends(get_db)):
@@ -127,4 +140,3 @@ def delete_post(post_id:int,db:Session=Depends(get_db)):
     return
     
 
-        
