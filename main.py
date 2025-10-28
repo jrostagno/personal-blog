@@ -1,9 +1,10 @@
 from math import ceil
 from typing import List, Literal, Optional, Union
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, status
+from pydantic_core.core_schema import tagged_union_schema
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.db import Base, engine, get_db
 
 
@@ -79,7 +80,8 @@ def list_post(
 def get_post_by_id(
     post_id:int=Path(...,ge=1,title="Id del post",description="Identificador del post",example="ejemplo 1"),
     include_content:bool= Query(default=True,description="Incluir o no el Contenido"),
-    db:Session=Depends(get_db)):
+    db:Session=Depends(get_db)
+    ):
     post_fin= db.execute(select(PostORM).where(PostORM.id==post_id)).scalar_one_or_none()
     
     if not post_fin:
@@ -88,6 +90,29 @@ def get_post_by_id(
         return PostPublic.model_validate(post_fin,from_attributes=True)
     
     return PostSummary.model_validate(post_fin,from_attributes=True)
+
+
+
+@app.get("/post/by-tags",response_model=PostPublic)
+def get_post_by_tags(tags:List[str]=Query(...,min_length=1,description="Una o mas etiquetas, Ejemplo: ?tags='python'?tags='java'"),db:Session=Depends(get_db)):
+    normalized_tags_names=[tag.strip().lower() for tag in tags if tag.strip()]
+    
+    if not normalized_tags_names:
+        return []
+
+    post_list = (
+        select(PostORM)
+        .options(
+            selectinload(PostORM.tags),
+            joinedload(PostORM.author),
+        ).where(PostORM.tags.any(func.lower(TagORM.name).in_(normalized_tags_names)))
+        .order_by(PostORM.id.asc())
+    )
+
+    posts = db.execute(post_list).scalars().all()
+
+    return posts
+    
 
 
 
@@ -124,6 +149,25 @@ def create_post(post:PostCreate,db:Session=Depends(get_db)):
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(status_code=500,detail="Error al crear el post")
+    
+
+@app.put("/put/{post_id}",response_model=PostPublic,response_description="Post actualizado con exito",status_code=status.HTTP_201_CREATED)
+def update_post(post_id:int, post:PostCreate,db:Session=Depends(get_db)):
+    post_to_update= db.execute(select(PostORM).where(PostORM.id== post_id)).scalar_one_or_none()
+    
+    if not post_to_update:
+         raise HTTPException(status_code=404, detail="Post no encontrado")
+    
+    updates= post.model_dump(exclude_unset=True)
+    
+    for key,value in updates.items():
+        setattr(post_to_update,key,value)
+    
+    db.add(post_to_update)
+    db.commit()
+    db.refresh(post_to_update)
+    
+    return post
     
     
 
