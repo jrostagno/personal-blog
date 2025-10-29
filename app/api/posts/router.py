@@ -1,13 +1,114 @@
 from math import ceil
 from typing import Literal, Optional, Union,List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.db import get_db
+from app.models import author
+from app.models.author import AuthorORM
+from app.models.post import PostORM
+from app.models.tag import TagORM
 from .schemas import (PostPublic,PaginatedPost,PostCreate,PostSummary,PostBase)
+
 from .repository import PostRepository
 
 
 router = APIRouter(prefix="/posts",tags=["posts"])
+
+
+
+@router.put("/{post_id}",response_model=PostPublic,response_description="Post actualizado con exito",status_code=status.HTTP_201_CREATED)
+def update_post(post_id:int, post:PostCreate,db:Session=Depends(get_db)):
+    
+    repository= PostRepository(db)
+    post_to_update =repository.get(post_id)
+    
+    if not post_to_update:
+         raise HTTPException(status_code=404, detail="Post no encontrado")
+    try:
+     updates= post.model_dump(exclude_unset=True)
+     new_post= repository.update_post(post_to_update,updates)
+     db.commit()
+     db.refresh(new_post)
+     return new_post
+    
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500,detail="Error al actualizar el post")
+        
+    
+
+@router.delete("/{post_id}",status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(post_id:int,db:Session=Depends(get_db)):
+    
+    repository= PostRepository(db)
+    post_to_delete =repository.get(post_id)
+    if not post_to_delete:
+         raise HTTPException(status_code=404, detail="Post no encontrado")
+     
+    try:    
+     repository.delete_post(post_id)   
+     db.commit()
+    except SQLAlchemyError:
+     db.rollback()
+     raise HTTPException(status_code=500,detail="Error al eliminar el post")
+    
+    
+
+
+
+
+@router.get("/{post_id}",response_model=Union[PostPublic,PostSummary], response_description="Post encontrado")
+def get_post_by_id(
+    post_id:int=Path(...,ge=1,title="Id del post",description="Identificador del post",example="ejemplo 1"),
+    include_content:bool= Query(default=True,description="Incluir o no el Contenido"),
+    db:Session=Depends(get_db)
+    ):
+    
+    repository= PostRepository(db)
+    post_fin=repository.get(post_id)
+    
+    if not post_fin:
+        raise HTTPException(status_code=404,detail="Post no encontrado")
+    if include_content:
+        return PostPublic.model_validate(post_fin,from_attributes=True)
+    
+    return PostSummary.model_validate(post_fin,from_attributes=True)
+
+
+@router.post("", response_model=PostPublic,response_description="Post Creado con exito",status_code=status.HTTP_201_CREATED)
+def create_post(post:PostCreate,db:Session=Depends(get_db)):
+    
+    repository= PostRepository(db)        
+    try:
+        
+        new_post = repository.create_post(
+            title=post.title,
+            content=post.content,
+            author=post.author.model_dump() if post.author else None,
+            tags=[tag.model_dump() for tag in post.tags]
+        )
+       
+        db.commit()
+        db.refresh(new_post)
+        return PostPublic.model_validate(new_post)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409,detail='El titulo ya existe, prueba con otro')
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500,detail="Error al crear el post")
+    
+
+
+@router.get("/by-tags",response_model=PaginatedPost)
+def get_post_by_tags(tags:List[str]=Query(...,min_length=1,description="Una o mas etiquetas, Ejemplo: ?tags='python'?tags='java'"),db:Session=Depends(get_db)):
+    repository= PostRepository(db)
+    return repository.by_tags(tags)
+
+    
 
 
 @router.get("",response_model=PaginatedPost)
@@ -25,7 +126,7 @@ def list_post(
     
     total,items= repository.search(query,order_by,direction,page,per_page)
     
-    total_pages= ceil(total/per_page) if total>0 else 0
+    total_pages= ceil(total/per_page) if total>0 else 0 
     
     current_page= 1 if total_pages==0 else min(page,total_pages)
     has_prev = current_page > 1
