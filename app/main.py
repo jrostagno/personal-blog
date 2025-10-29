@@ -10,7 +10,7 @@ from app.core.db import Base, engine, get_db
 
 # 👇 ¡IMPORTAR modelos antes de create_all!
 from app.models.models import AuthorORM, PostORM, TagORM, post_tags
-from app.schemas.schemas import PaginatedPost, PostCreate, PostPublic, PostSummary  
+from app.api.posts.schemas import PaginatedPost, PostCreate, PostPublic, PostSummary  
 
 # Solo en desarrollo: crear tablas si no existen
 Base.metadata.create_all(bind=engine)
