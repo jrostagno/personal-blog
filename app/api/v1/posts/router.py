@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.db import get_db
-from app.models import author
+from app.core.security import oauth2_scheme
 from app.models.author import AuthorORM
 from app.models.post import PostORM
 from app.models.tag import TagORM
@@ -154,3 +154,8 @@ def list_post(
             search=query,
             items=items
         )
+    
+
+@router.get("/secure")
+def secure_endpoint(token:str=Depends(oauth2_scheme)):
+    return {"message":"Acceso con Token", "token_recibido":token}

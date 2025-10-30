@@ -3,7 +3,7 @@ from fastapi import  FastAPI
 
 # 👇 ¡IMPORTAR modelos antes de create_all!
 from app.core.db import Base,engine,get_db
-from app.api.posts.router import router as post_router
+from app.api.v1.posts.router import router as post_router
 
 
 # Solo en desarrollo: crear tablas si no existen

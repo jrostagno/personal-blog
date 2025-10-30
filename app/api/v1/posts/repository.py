@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import select,func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.api.posts.schemas import PostPublic
+from app.api.v1.posts.schemas import PostPublic
 from app.models.author import AuthorORM
 from app.models.post import PostORM
 from app.models.tag import TagORM
