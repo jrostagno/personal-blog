@@ -10,7 +10,7 @@ from app.models import author
 from app.models.author import AuthorORM
 from app.models.post import PostORM
 from app.models.tag import TagORM
-from .schemas import (PostPublic,PaginatedPost,PostCreate,PostSummary,PostBase)
+from .schemas import (PostPublic,PaginatedPost,PostCreate,PostSummary,PostBase, PostUpdate)
 
 from .repository import PostRepository
 
@@ -19,8 +19,22 @@ router = APIRouter(prefix="/posts",tags=["posts"])
 
 
 
-@router.put("/{post_id}",response_model=PostPublic,response_description="Post actualizado con exito",status_code=status.HTTP_201_CREATED)
-def update_post(post_id:int, post:PostCreate,db:Session=Depends(get_db)):
+@router.get("/by-tags", response_model=List[PostPublic])
+def get_post_by_tags(
+    tags: List[str] = Query(
+        ...,
+        description="Una o más etiquetas. Ejemplo: ?tags=python&tags=java",
+    ),
+    db: Session = Depends(get_db),
+):
+    repository = PostRepository(db)
+    posts = repository.by_tags(tags)
+    return [PostPublic.model_validate(p, from_attributes=True) for p in posts]
+
+
+
+@router.put("/{post_id}",response_model=PostPublic,response_description="Post actualizado con exito",status_code=status.HTTP_200_OK)
+def update_post(post_id:int, post:PostUpdate,db:Session=Depends(get_db)):
     
     repository= PostRepository(db)
     post_to_update =repository.get(post_id)
@@ -34,6 +48,9 @@ def update_post(post_id:int, post:PostCreate,db:Session=Depends(get_db)):
      db.refresh(new_post)
      return new_post
     
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409,detail='El titulo ya existe, prueba con otro')
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(status_code=500,detail="Error al actualizar el post")
@@ -49,7 +66,7 @@ def delete_post(post_id:int,db:Session=Depends(get_db)):
          raise HTTPException(status_code=404, detail="Post no encontrado")
      
     try:    
-     repository.delete_post(post_id)   
+     repository.delete_post(post_to_delete)   
      db.commit()
     except SQLAlchemyError:
      db.rollback()
@@ -101,16 +118,9 @@ def create_post(post:PostCreate,db:Session=Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500,detail="Error al crear el post")
     
-
-
-@router.get("/by-tags",response_model=PaginatedPost)
-def get_post_by_tags(tags:List[str]=Query(...,min_length=1,description="Una o mas etiquetas, Ejemplo: ?tags='python'?tags='java'"),db:Session=Depends(get_db)):
-    repository= PostRepository(db)
-    return repository.by_tags(tags)
-
     
-
-
+    
+    
 @router.get("",response_model=PaginatedPost)
 def list_post(
             text: Optional[str] = Query(default=None, deprecated=True,description="parametro obsoleto usa query en su lugar"),

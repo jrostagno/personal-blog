@@ -1,7 +1,6 @@
 
-from inspect import _void
 from math import ceil
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from sqlalchemy import select,func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -62,7 +61,6 @@ class PostRepository:
     
     def by_tags(self,tags:List[str])->List[PostORM]:
             normalized_tags_names=[tag.strip().lower() for tag in tags if tag.strip()]
-    
             if not normalized_tags_names:
                 return []
 
@@ -86,7 +84,7 @@ class PostRepository:
         if author_obj:
             return author_obj
                 
-        author_obj=AuthorORM(name=name.name,email=email)
+        author_obj=AuthorORM(name=name,email=email)
         self.db.add(author_obj)
         self.db.flush()
         return author_obj
@@ -126,13 +124,12 @@ class PostRepository:
         
     
     
-    def update_post(self,post:PostORM,updates:dict)->PostORM:
+    def update_post(self,post:PostORM,updates:Dict)->PostORM:
         
         for key,value in updates.items():
             setattr(post,key,value)
             
         self.db.add(post)
-        self.db.refresh(post)
         
         return post
         

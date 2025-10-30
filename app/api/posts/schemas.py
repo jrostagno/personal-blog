@@ -48,6 +48,10 @@ class PostSummary(BaseModel):
     title:str
     model_config=ConfigDict(from_attributes=True)
     
+class PostUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=3, max_length=100)
+    content: Optional[str] = None
+    
 
 class PaginatedPost(BaseModel):
     page:int
