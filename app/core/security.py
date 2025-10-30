@@ -1,3 +1,41 @@
+from datetime import datetime, timedelta, timezone
+import os
+from typing import Optional
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+import jwt
 
-oauth2_scheme= OAuth2PasswordBearer(tokenUrl="/api/vi/auth/login")  # Le decimos a Fastapi ue los toquen se obtendran de esta url 
+
+SECRET_KEY= os.getenv('SECRET_KEY','change-me-in-prod')
+ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES=int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES','30'))
+
+oauth2_scheme= OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")  # Le decimos a Fastapi ue los toquen se obtendran de esta url 
+
+
+def create_access_token(data:dict,expire_delta:Optional[timedelta]=None):
+    to_encode=data.copy()
+    expire=datetime.now(tz=timezone.utc) + (expire_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({'exp':expire})
+    token= jwt.encode(payload=to_encode,key=SECRET_KEY,algorithm=ALGORITHM)
+    return token
+
+def decode_token(token:str)->dict:
+    payload=jwt.decode(jwt=token,key=SECRET_KEY,algorithms=[ALGORITHM])
+    return payload 
+
+def get_current_user(token:str=Depends(oauth2_scheme)):
+    credentials_exc=HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="No autenticado",headers={"WWW-Authenticate":"Bearer"})
+    
+    try:
+        payload=decode_token(token)
+        sub = payload.get('sub')
+        username = payload.get('username')
+        if not sub or not username:
+            raise credentials_exc
+        return {"email": sub, "username": username}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail='Token expirado',headers={"WWW-Authenticate":"Bearer"})
+    except jwt.InvalidTokenError:
+        raise credentials_exc
+
