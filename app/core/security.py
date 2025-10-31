@@ -13,6 +13,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES=int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES','30'))
 oauth2_scheme= OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")  # Le decimos a Fastapi ue los toquen se obtendran de esta url 
 
 
+def raise_forbidden_token():
+    return  HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail='No tienees permisoss sufientes')
+
+
+def raise_expired_token():
+    return  HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail='Token expirado',headers={"WWW-Authenticate":"Bearer"})
+
 def create_access_token(data:dict,expire_delta:Optional[timedelta]=None):
     to_encode=data.copy()
     expire=datetime.now(tz=timezone.utc) + (expire_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -35,7 +42,7 @@ def get_current_user(token:str=Depends(oauth2_scheme)):
             raise credentials_exc
         return {"email": sub, "username": username}
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail='Token expirado',headers={"WWW-Authenticate":"Bearer"})
+       raise raise_expired_token()
     except jwt.InvalidTokenError:
         raise credentials_exc
 

@@ -36,7 +36,7 @@ class PostCreate(BaseModel):
     
     tags:List[Tag]=Field(default_factory=list) # []
     
-    author:Optional[Author]=None
+    # author:Optional[Author]=None
     
     
 class PostPublic(PostBase):

@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.db import get_db
-from app.core.security import oauth2_scheme
+from app.core.security import get_current_user, oauth2_scheme
 from app.models.author import AuthorORM
 from app.models.post import PostORM
 from app.models.tag import TagORM
@@ -34,7 +34,7 @@ def get_post_by_tags(
 
 
 @router.put("/{post_id}",response_model=PostPublic,response_description="Post actualizado con exito",status_code=status.HTTP_200_OK)
-def update_post(post_id:int, post:PostUpdate,db:Session=Depends(get_db)):
+def update_post(post_id:int, post:PostUpdate,db:Session=Depends(get_db),user=Depends(get_current_user)):
     
     repository= PostRepository(db)
     post_to_update =repository.get(post_id)
@@ -58,7 +58,7 @@ def update_post(post_id:int, post:PostUpdate,db:Session=Depends(get_db)):
     
 
 @router.delete("/{post_id}",status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(post_id:int,db:Session=Depends(get_db)):
+def delete_post(post_id:int,db:Session=Depends(get_db),user=Depends(get_current_user)):
     
     repository= PostRepository(db)
     post_to_delete =repository.get(post_id)
@@ -96,7 +96,7 @@ def get_post_by_id(
 
 
 @router.post("", response_model=PostPublic,response_description="Post Creado con exito",status_code=status.HTTP_201_CREATED)
-def create_post(post:PostCreate,db:Session=Depends(get_db)):
+def create_post(post:PostCreate,db:Session=Depends(get_db), user=Depends(get_current_user)):
     
     repository= PostRepository(db)        
     try:
@@ -104,7 +104,7 @@ def create_post(post:PostCreate,db:Session=Depends(get_db)):
         new_post = repository.create_post(
             title=post.title,
             content=post.content,
-            author=post.author.model_dump() if post.author else None,
+            author=user,
             tags=[tag.model_dump() for tag in post.tags]
         )
        
