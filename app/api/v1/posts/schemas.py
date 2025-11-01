@@ -1,6 +1,7 @@
 
-from typing import List, Literal, Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from typing import Annotated, List, Literal, Optional
+from fastapi import Form
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class Tag(BaseModel):
@@ -18,6 +19,7 @@ class PostBase(BaseModel):
     content:str
     tags:Optional[List[Tag]]=Field(default_factory=list)
     author:Optional[Author]=None
+    image_url:Optional[str]=None
     model_config=ConfigDict(from_attributes=True)
 
 
@@ -37,6 +39,23 @@ class PostCreate(BaseModel):
     tags:List[Tag]=Field(default_factory=list) # []
     
     # author:Optional[Author]=None
+    
+    @field_validator("title")
+    @classmethod
+    def not_allowed_title(cls,value:str)->str:
+        if 'span' in value.lower():
+            raise ValueError("El titulo no debe contener span")
+        return value
+    
+    @classmethod
+    def as_form(
+        cls,
+        title:Annotated[str,Form(min_length=3)],
+        content:Annotated[str,Form(min_length=10)],
+        tags:Annotated[List[str],Form()]=None  
+    ):
+        tag_objs=[Tag(name=t) for t in (tags or [])]
+        return cls(title=title,content=content,tags=tag_objs)
     
     
 class PostPublic(PostBase):

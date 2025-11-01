@@ -101,13 +101,13 @@ class PostRepository:
             
         return tag_obj
     
-    def create_post(self,title:str,content:str,author:List[dict],tags:List[dict])->PostORM:
+    def create_post(self,title:str,content:str,author:Optional[dict],tags:List[dict],image_url:Optional[str])->PostORM:
         author_obj=None
         
         if author:
             author_obj=self.ensure_author(author['username'],author['email'])
         
-        post= PostORM(title=title, content=content, author=author_obj)
+        post= PostORM(title=title, content=content,image_url=image_url ,author=author_obj)
         
         for tag in tags:
             tag_obj= self.ensure_tags(tag['name'])
@@ -115,7 +115,6 @@ class PostRepository:
             
         self.db.add(post)
         self.db.flush()
-        self.db.refresh(post)
         
         return post
     

@@ -1,15 +1,16 @@
 from math import ceil
-from typing import Literal, Optional, Union,List
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
+from typing import Annotated, Literal, Optional, Union,List
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Path, UploadFile, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session,  selectinload
 from app.core.db import get_db
 from app.core.security import get_current_user, oauth2_scheme
 from app.models.author import AuthorORM
 from app.models.post import PostORM
 from app.models.tag import TagORM
+from app.services.save_file import save_upload_image
 from .schemas import (PostPublic,PaginatedPost,PostCreate,PostSummary,PostBase, PostUpdate)
 
 from .repository import PostRepository
@@ -96,27 +97,53 @@ def get_post_by_id(
 
 
 @router.post("", response_model=PostPublic,response_description="Post Creado con exito",status_code=status.HTTP_201_CREATED)
-def create_post(post:PostCreate,db:Session=Depends(get_db), user=Depends(get_current_user)):
+async def create_post(post:Annotated[PostCreate, Depends(PostCreate.as_form)], image:Optional[UploadFile]=File(None),db:Session=Depends(get_db), user=Depends(get_current_user)):
     
-    repository= PostRepository(db)        
+    repository= PostRepository(db)  
+    save= None      
     try:
+        if image is not None:
+            save= await save_upload_image(image)
+        
+        image_url=save['url'] if save else None
         
         new_post = repository.create_post(
             title=post.title,
             content=post.content,
             author=user,
-            tags=[tag.model_dump() for tag in post.tags]
+            tags=[tag.model_dump() for tag in post.tags],
+            image_url=image_url
         )
        
+        # Hacer commit antes de recargar
         db.commit()
-        db.refresh(new_post)
-        return PostPublic.model_validate(new_post)
-    except IntegrityError:
+        
+        # Recargar el post con sus relaciones después del commit
+        # Necesitamos recargar porque después del commit el objeto puede estar detached
+        reloaded_post = db.execute(
+            select(PostORM)
+            .options(selectinload(PostORM.tags), selectinload(PostORM.author))
+            .where(PostORM.id == new_post.id)
+        ).scalar_one_or_none()
+        
+        if not reloaded_post:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Error al recargar el post después de crearlo")
+        
+        return PostPublic.model_validate(reloaded_post, from_attributes=True)
+    except IntegrityError as e:
         db.rollback()
         raise HTTPException(status_code=409,detail='El titulo ya existe, prueba con otro')
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500,detail="Error al crear el post")
+        import traceback
+        error_detail = f"Error SQLAlchemy: {str(e)}\n{traceback.format_exc()}"
+        raise HTTPException(status_code=500,detail=f"Error al crear el post: {error_detail}")
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_detail = f"Error inesperado: {str(e)}\n{traceback.format_exc()}"
+        raise HTTPException(status_code=500,detail=f"Error inesperado al crear el post: {error_detail}")
     
     
     

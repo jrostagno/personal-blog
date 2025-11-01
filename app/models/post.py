@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import List, Optional,TYPE_CHECKING
-from sqlalchemy import  Column,Table,DateTime, ForeignKey, Integer, String,Text , func
+from sqlalchemy import  Column,Table,DateTime, ForeignKey, Integer, String,Text , func, null
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.db import Base
 
@@ -23,6 +23,7 @@ class PostORM(Base):
     id:Mapped[int]=mapped_column(Integer, primary_key=True)
     title:Mapped[str]=mapped_column(String(150),nullable=False)
     content:Mapped[str]=mapped_column(Text, nullable=False)
+    image_url:Mapped[Optional[str]]=mapped_column(String(300), nullable=True)
     created_at:Mapped[DateTime]=mapped_column(DateTime ,server_default=func.now(),nullable=False)
     
     author_id:Mapped[Optional[int]]=mapped_column(ForeignKey('authors.id'))
